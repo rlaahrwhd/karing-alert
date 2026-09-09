@@ -21,7 +21,10 @@ def settings_object():
     obj.volume = Value(80)
     obj.font_scale = 100
     obj.font_scale_input = Value('100%')
-    obj.phase, obj.voice, obj.topmost = Value('3'), Value(True), Value(True)
+    obj.voice, obj.topmost = Value(True), Value(False)
+    obj.interval = 10
+    obj.interval_input = Value('10')
+    obj.gate = app.Cooldown(10)
     obj.theme = Value('dark')
     obj.high, obj.low = 800, 100
     obj.high_input, obj.low_input = Value('800'), Value('100')
@@ -30,6 +33,13 @@ def settings_object():
 
 
 class Settings(unittest.TestCase):
+    def test_topmost_defaults_off_and_keeps_new_explicit_choice(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(app,'CONFIG',Path(directory)/'settings.json'):
+            for data in ({},{'topmost':True},{'topmost':True,'topmost_default_v2':True}):
+                app.CONFIG.write_text(json.dumps(data),encoding='utf-8')
+                obj=settings_object()
+                obj.settings_load()
+                self.assertEqual(obj.topmost.get(),bool(data.get('topmost_default_v2')))
     def test_roundtrip_theme_and_thresholds(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(app, 'CONFIG', Path(directory)/'settings.json'):
             original = settings_object()
@@ -37,7 +47,7 @@ class Settings(unittest.TestCase):
             original.high, original.low = 900, 200
             original.volume.set(35)
             original.font_scale = 120
-            original.phase.set('1')
+            original.interval = 25
             original.gauge_region = {'left':10,'top':20,'width':280,'height':310}
             original.settings_save()
             loaded = settings_object()
@@ -47,7 +57,10 @@ class Settings(unittest.TestCase):
             self.assertEqual(loaded.volume.get(), 35)
             self.assertEqual(loaded.font_scale, 120)
             self.assertEqual(loaded.font_scale_input.get(), '120%')
-            self.assertEqual(loaded.phase.get(), '1')
+            self.assertEqual(loaded.interval,25)
+            self.assertEqual(loaded.interval_input.get(),'25')
+            self.assertEqual(loaded.gate.seconds,25)
+            self.assertNotIn('phase',json.loads(app.CONFIG.read_text(encoding='utf-8')))
             self.assertEqual(loaded.gauge_region, original.gauge_region)
 
     def test_old_settings_and_invalid_thresholds(self):

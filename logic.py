@@ -2,10 +2,24 @@
 import re
 
 NAMES = ('혼돈', '도올', '궁기')
+
+
+def region_from_preview(monitor, preview_size, start, end):
+    width, height = preview_size
+    xs = sorted(max(0, min(width, x)) for x in (start[0], end[0]))
+    ys = sorted(max(0, min(height, y)) for y in (start[1], end[1]))
+    x1, x2 = [round(x * monitor['width'] / width) for x in xs]
+    y1, y2 = [round(y * monitor['height'] / height) for y in ys]
+    return {'left':monitor['left']+x1,'top':monitor['top']+y1,'width':x2-x1,'height':y2-y1}
+
+
+def region_in_monitor(region, monitor):
+    return (monitor['left'] <= region['left'] and monitor['top'] <= region['top']
+            and region['left']+region['width'] <= monitor['left']+monitor['width']
+            and region['top']+region['height'] <= monitor['top']+monitor['height'])
 # Thread -> (gauge increased, gauge decreased)
 THREADS = {'노란': ('혼돈', '도올'), '초록': ('도올', '궁기'), '빨간': ('궁기', '혼돈')}
-POSITIONS = {2: {'빨간': '왼쪽', '초록': '중앙', '노란': '오른쪽'},
-             3: {'빨간': '왼쪽', '노란': '중앙', '초록': '오른쪽'}}
+
 
 
 def validate_thresholds(high, low):
@@ -60,7 +74,7 @@ class StableReadings:
         return values
 
 
-def advice(values, phase=3, high=800, low=100):
+def advice(values, high=800, low=100):
     if any(values.get(n) is None for n in NAMES):
         return None, '숫자 확인 중 · 세 게이지가 모두 인식되면 안내합니다.'
     extremes = [n for n in NAMES if values[n] in (0, 1000)]
@@ -84,17 +98,17 @@ def advice(values, phase=3, high=800, low=100):
     state = '높아요' if direction == 'high' else '낮아요'
     if conflict:
         return ('conflict', name, direction), f'{name} 게이지가 너무 {state}! {color} 실은 {other}도 위험하게 만들 수 있어요. 함께 확인해주세요.'
-    return (name, direction, color), f'{name} 게이지가 너무 {state}! {color}실 맞아줘요.'
+    return (name, direction, color), f'{name} 게이지가 너무 {state}! {color}실 맞아요.'
 
 
 def spoken_advice(key, text):
     if key and key[0] not in ('conflict', 'end', 'error'):
-        return f'{key[2]}실 맞아줘요.'
+        return f'{key[2]}실 맞아요.'
     return text
 
 
 def voice_clip(text):
-    colors = {'빨간실 맞아줘요.':'red', '초록실 맞아줘요.':'green', '노란실 맞아줘요.':'yellow'}
+    colors = {'빨간실 맞아요.':'red', '초록실 맞아요.':'green', '노란실 맞아요.':'yellow'}
     if text in colors:
         return colors[text]
     if '한계값' in text:
@@ -114,3 +128,9 @@ class Cooldown:
             return False
         self.last = now
         return True
+
+
+def validate_interval(value):
+    if not re.fullmatch(r'[0-9]{1,3}',str(value)) or not 1 <= int(value) <= 300:
+        raise ValueError('음성 간격은 1~300초 사이의 정수로 입력해주세요.')
+    return int(value)

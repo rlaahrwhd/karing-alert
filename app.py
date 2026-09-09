@@ -10,7 +10,7 @@ import time
 import tkinter as tk
 from tkinter import ttk, messagebox, font as tkfont
 
-from logic import NAMES, StableReadings, Cooldown, advice, parse_number, validate_thresholds, assign_gauge_numbers, spoken_advice, voice_clip
+from logic import NAMES, StableReadings, Cooldown, advice, parse_number, validate_thresholds, assign_gauge_numbers, spoken_advice, voice_clip, region_from_preview, region_in_monitor, validate_interval
 
 try:
     ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
@@ -175,12 +175,13 @@ class App:
         self.stop.set()
         self.worker = None
         self.speaker = Speaker()
-        self.gate = Cooldown()
+        self.interval = 10
+        self.interval_input = tk.StringVar(value='10')
+        self.gate = Cooldown(self.interval)
         self.voice = tk.BooleanVar(value=True)
         self.volume = tk.IntVar(value=80)
         self.volume_label = tk.StringVar(value='80%')
-        self.topmost = tk.BooleanVar(value=True)
-        self.phase = tk.StringVar(value='3')
+        self.topmost = tk.BooleanVar(value=False)
         self.font_scale = 100
         self.font_scale_input = tk.StringVar(value='100%')
         self.font_objects = {}
@@ -254,7 +255,7 @@ class App:
         top = ttk.Frame(config, style='InnerCard.TFrame')
         top.pack(fill='x')
         ttk.Label(top, text='알림 조건', style='Section.TLabel').pack(side='left')
-        ttk.Label(top, text='세 게이지 공통 · 음성 간격 10초', style='CardMuted.TLabel').pack(side='right')
+        ttk.Label(top, text='세 게이지 공통', style='CardMuted.TLabel').pack(side='right')
         inputs = ttk.Frame(config, style='InnerCard.TFrame')
         inputs.pack(fill='x', pady=(12, 10))
         ttk.Label(inputs, text='게이지', style='Card.TLabel').pack(side='left')
@@ -271,15 +272,16 @@ class App:
 
         options = ttk.Frame(frame)
         options.pack(fill='x', pady=(0, 12))
-        ttk.Label(options, text='페이즈', style='Muted.TLabel').pack(side='left')
-        combo = ttk.Combobox(options, textvariable=self.phase, values=['1', '2', '3'], state='readonly', width=3)
-        combo.pack(side='left', padx=(8, 22))
-        combo.bind('<<ComboboxSelected>>', lambda e: self.preference_changed())
+        ttk.Label(options, text='음성 간격', style='Muted.TLabel').pack(side='left')
+        interval_field = ttk.Spinbox(options, from_=1, to=300, textvariable=self.interval_input, width=4)
+        interval_field.pack(side='left', padx=(8,6))
+        ttk.Label(options, text='초', style='Muted.TLabel').pack(side='left', padx=(0,18))
+        interval_field.bind('<Return>', lambda e: self.apply_thresholds())
         ttk.Label(options, text='글자 크기', style='Muted.TLabel').pack(side='left')
         font_picker = ttk.Combobox(options, textvariable=self.font_scale_input, values=['80%','90%','100%','110%','120%','130%'], state='readonly', width=6)
         font_picker.pack(side='left', padx=(8,0))
         font_picker.bind('<<ComboboxSelected>>', lambda e: self.change_font_scale())
-        ttk.Button(options, text='음성 테스트', command=lambda: self.speaker.speak('빨간실 맞아줘요.', self.volume.get())).pack(side='right')
+        ttk.Button(options, text='음성 테스트', command=lambda: self.speaker.speak('빨간실 맞아요.', self.volume.get())).pack(side='right')
 
         toggle_row = ttk.Frame(frame)
         toggle_row.pack(fill='x', pady=(0,12))
@@ -399,26 +401,30 @@ class App:
         self.settings_save()
 
     def update_threshold_note(self):
-        self.threshold_note.set(f'적용 중  ≥ {self.high}  /  ≤ {self.low}     ·     0~1000 사이, 하한은 상한보다 작게 입력')
+        self.threshold_note.set(f'적용 중  ≥ {self.high}  /  ≤ {self.low}     ·     음성 간격 {self.interval}초 · 변경 후 설정 적용')
 
     def apply_thresholds(self):
         try:
             high, low = validate_thresholds(self.high_input.get().strip(), self.low_input.get().strip())
+            interval = validate_interval(self.interval_input.get().strip())
         except ValueError as exc:
             messagebox.showerror('알림 조건 확인', str(exc), parent=self.root)
             return False
         self.high, self.low = high, low
+        self.interval = interval
+        self.interval_input.set(str(interval))
+        self.gate.seconds = interval
         self.high_input.set(str(high))
         self.low_input.set(str(low))
         self.update_threshold_note()
         self.refresh_values()
         self.preference_changed()
-        self.status.set(f'알림 기준을 저장했어요. {high} 이상 또는 {low} 이하일 때 알려드려요.')
+        self.status.set(f'알림 기준을 저장했어요. {high} 이상 또는 {low} 이하일 때 {interval}초 간격으로 알려드려요.')
         return True
 
     def preference_changed(self):
         if not self.stop.is_set():
-            self.alert_key, text = advice(self.current_values, int(self.phase.get()), self.high, self.low)
+            self.alert_key, text = advice(self.current_values, high=self.high, low=self.low)
             self.message.set(text)
             self.refresh_alert()
         self.settings_save()
@@ -440,9 +446,14 @@ class App:
             self.font_scale_input.set(f'{self.font_scale}%')
             volume = data.get('volume', 80)
             self.volume.set(max(0,min(100,volume)) if type(volume) is int else 80)
-            self.phase.set(str(data.get('phase', 3)) if data.get('phase', 3) in (1, 2, 3) else '3')
+            try:
+                self.interval = validate_interval(data.get('interval',10))
+            except ValueError:
+                self.interval = 10
+            self.interval_input.set(str(self.interval))
+            self.gate.seconds = self.interval
             self.voice.set(bool(data.get('voice', True)))
-            self.topmost.set(bool(data.get('topmost', True)))
+            self.topmost.set(bool(data.get('topmost', False)) if data.get('topmost_default_v2') else False)
             self.theme.set(data.get('theme') if data.get('theme') in ('dark', 'light') else 'dark')
             try:
                 self.high, self.low = validate_thresholds(data.get('high', 800), data.get('low', 100))
@@ -455,7 +466,7 @@ class App:
 
     def settings_save(self):
         try:
-            CONFIG.write_text(json.dumps({'gauge_region': self.gauge_region, 'volume': self.volume.get(), 'font_scale': self.font_scale, 'phase': int(self.phase.get()), 'voice': self.voice.get(), 'topmost': self.topmost.get(), 'theme': self.theme.get(), 'high': self.high, 'low': self.low}, ensure_ascii=False, indent=2), encoding='utf-8')
+            CONFIG.write_text(json.dumps({'gauge_region': self.gauge_region, 'volume': self.volume.get(), 'font_scale': self.font_scale, 'interval': self.interval, 'voice': self.voice.get(), 'topmost': self.topmost.get(), 'topmost_default_v2': True, 'theme': self.theme.get(), 'high': self.high, 'low': self.low}, ensure_ascii=False, indent=2), encoding='utf-8')
         except OSError as exc:
             self.status.set(f'설정 저장 실패: {exc}')
 
@@ -463,63 +474,96 @@ class App:
         if self.worker and self.worker.is_alive():
             messagebox.showinfo('영역 지정', '모니터링을 종료한 후 영역을 지정해주세요.')
             return
-        self.root.withdraw()
-        self.root.after(250, self.selector)
-
-    def selector(self):
         import mss
-        from PIL import Image, ImageTk
         try:
             with mss.mss() as capture:
-                monitor = capture.monitors[0]
+                monitors = [dict(m) for m in capture.monitors[1:]]
+            if not monitors:
+                raise RuntimeError('사용 가능한 모니터가 없습니다.')
+        except Exception as exc:
+            messagebox.showerror('모니터 확인', str(exc))
+            return
+        picker = tk.Toplevel(self.root)
+        picker.title('게임이 있는 모니터 선택')
+        picker.transient(self.root)
+        body = ttk.Frame(picker, padding=20)
+        body.pack(fill='both', expand=True)
+        ttk.Label(body, text='메이플스토리가 있는 화면을 선택하세요.').pack(pady=(0,12))
+        def choose(monitor, number):
+            picker.destroy()
+            self.root.withdraw()
+            self.root.after(250, lambda: self.selector(monitor, number))
+        for number, monitor in enumerate(monitors,1):
+            title = f"모니터 {number}  ·  {monitor['width']} × {monitor['height']}  ·  위치 ({monitor['left']}, {monitor['top']})"
+            ttk.Button(body, text=title, command=lambda m=monitor,n=number:choose(m,n)).pack(fill='x',pady=4)
+        picker.grab_set()
+
+    def selector(self, monitor, number):
+        import mss
+        from PIL import Image, ImageTk
+        overlay = None
+        try:
+            with mss.mss() as capture:
                 shot = capture.grab(monitor)
                 picture = Image.frombytes('RGB', shot.size, shot.rgb)
+            scale = min(1, 1000/monitor['width'], 600/monitor['height'])
+            preview_size = (round(monitor['width']*scale), round(monitor['height']*scale))
             overlay = tk.Toplevel(self.root)
-            overlay.overrideredirect(True)
+            overlay.title(f'모니터 {number} · 게이지 전체 영역 지정')
+            overlay.resizable(False,False)
             overlay.attributes('-topmost', True)
-            overlay.geometry(f"{monitor['width']}x{monitor['height']}+0+0")
-            overlay.update_idletasks()
-            # Signed virtual desktop coordinates work for monitors left of primary.
-            hwnd = ctypes.windll.user32.GetParent(overlay.winfo_id())
-            ctypes.windll.user32.SetWindowPos(hwnd, -1, monitor['left'], monitor['top'], monitor['width'], monitor['height'], 0x0040)
-            canvas = tk.Canvas(overlay, highlightthickness=0, cursor='crosshair')
-            canvas.pack(fill='both', expand=True)
-            photo = ImageTk.PhotoImage(picture)
-            canvas.create_image(0, 0, image=photo, anchor='nw')
+            ttk.Label(overlay, text='세 숫자를 포함한 게이지 전체를 드래그하세요.  Esc: 취소', padding=12).pack(fill='x')
+            canvas = tk.Canvas(overlay, width=preview_size[0], height=preview_size[1], highlightthickness=0, cursor='crosshair')
+            canvas.pack()
+            photo = ImageTk.PhotoImage(picture.resize(preview_size, Image.Resampling.LANCZOS))
+            canvas.create_image(0,0,image=photo,anchor='nw')
             canvas.photo = photo
-            canvas.create_rectangle(10, 10, 830, 60, fill='#101827', outline='')
-            canvas.create_text(25, 34, text='세 숫자가 포함된 게이지 전체를 드래그하세요 · Esc 취소', fill='white', anchor='w', font=self.ui_font(15))
+            overlay.update_idletasks()
+            # Use native signed desktop coordinates; Tk negative geometry offsets
+            # mean distance from the screen edge, not a negative monitor origin.
+            user32 = ctypes.windll.user32
+            user32.GetAncestor.argtypes = [ctypes.c_void_p,ctypes.c_uint]
+            user32.GetAncestor.restype = ctypes.c_void_p
+            user32.SetWindowPos.argtypes = [ctypes.c_void_p,ctypes.c_void_p,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_uint]
+            hwnd = user32.GetAncestor(overlay.winfo_id(),2)
+            x = monitor['left'] + max(0,(monitor['width']-overlay.winfo_width())//2)
+            y = monitor['top'] + max(0,(monitor['height']-overlay.winfo_height())//2)
+            user32.SetWindowPos(hwnd,None,x,y,0,0,0x0015)
             start = []
             box = [None]
+            def cancel(event=None):
+                overlay.destroy()
+                self.root.deiconify()
             def begin(event):
-                start[:] = [event.x, event.y]
+                start[:] = [event.x,event.y]
                 if box[0]:
                     canvas.delete(box[0])
-                box[0] = canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='#00ffb3', width=3)
+                box[0] = canvas.create_rectangle(event.x,event.y,event.x,event.y,outline='#00ffb3',width=2)
             def drag(event):
                 if start:
-                    canvas.coords(box[0], *start, event.x, event.y)
+                    canvas.coords(box[0],*start,event.x,event.y)
             def finish(event):
                 if not start:
                     return
-                x1, x2 = sorted((start[0], event.x))
-                y1, y2 = sorted((start[1], event.y))
-                if not (60 <= x2-x1 <= 2000 and 60 <= y2-y1 <= 1500):
+                region = region_from_preview(monitor,preview_size,start,(event.x,event.y))
+                if not (60 <= region['width'] <= 2000 and 60 <= region['height'] <= 1500):
                     return
-                self.gauge_region = {'left': monitor['left']+x1, 'top': monitor['top']+y1, 'width': x2-x1, 'height': y2-y1}
-                overlay.destroy()
-                self.root.deiconify()
-                self.region_button.configure(text='게이지 영역 다시 지정')
+                self.gauge_region = region
+                cancel()
+                self.region_button.configure(text=f'모니터 {number} · 영역 다시 지정')
                 self.settings_save()
-                self.status.set('전체 영역 지정 완료. 위·왼쪽·오른쪽 숫자를 자동으로 구분합니다.')
-            canvas.bind('<ButtonPress-1>', begin)
-            canvas.bind('<B1-Motion>', drag)
-            canvas.bind('<ButtonRelease-1>', finish)
-            overlay.bind('<Escape>', lambda e: (overlay.destroy(), self.root.deiconify()))
+                self.status.set(f'모니터 {number}의 게이지 영역을 지정했어요.')
+            canvas.bind('<ButtonPress-1>',begin)
+            canvas.bind('<B1-Motion>',drag)
+            canvas.bind('<ButtonRelease-1>',finish)
+            overlay.bind('<Escape>',cancel)
+            overlay.protocol('WM_DELETE_WINDOW',cancel)
             overlay.focus_force()
         except Exception as exc:
+            if overlay is not None:
+                overlay.destroy()
             self.root.deiconify()
-            messagebox.showerror('화면 캡처 실패', str(exc))
+            messagebox.showerror('화면 캡처 실패',str(exc))
 
     def start(self):
         if not self.apply_thresholds():
@@ -529,10 +573,19 @@ class App:
             return
         if self.worker and self.worker.is_alive():
             return
+        import mss
+        try:
+            with mss.mss() as capture:
+                if not any(region_in_monitor(self.gauge_region,m) for m in capture.monitors[1:]):
+                    messagebox.showinfo('영역 다시 지정', '저장된 영역이 한 모니터 안에 있지 않아요. 모니터를 선택해 다시 지정해주세요.')
+                    return
+        except Exception as exc:
+            messagebox.showerror('모니터 확인',str(exc))
+            return
         while not self.events.empty():
             self.events.get_nowait()
         self.stop.clear()
-        self.gate = Cooldown()
+        self.gate = Cooldown(self.interval)
         self.settings_save()
         self.start_button.configure(state='disabled')
         self.status.set('OCR 준비 중… 처음 시작할 때 시간이 걸릴 수 있어요.')
@@ -604,7 +657,7 @@ class App:
                         else:
                             self.images[name].configure(image='', text='세 숫자 확인 중')
                             self.images[name].photo = None
-                    key, text = advice(values, int(self.phase.get()), self.high, self.low)
+                    key, text = advice(values, high=self.high, low=self.low)
                     self.message.set(text)
                     self.alert_key = key
                     self.refresh_alert()
