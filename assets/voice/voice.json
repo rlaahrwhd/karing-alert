@@ -7,7 +7,8 @@
     "green": "초록실 맞아요.",
     "yellow": "노란실 맞아요.",
     "limit": "게이지가 한계값이에요. 상태를 확인해주세요.",
-    "conflict": "두 게이지가 위험해요. 함께 확인해주세요."
+    "conflict": "두 게이지가 위험해요. 함께 확인해주세요.",
+    "limbo": "충전 완료"
   },
   "tempo_conversion": 1.2380952380952381,
   "pitch_preserved": true,

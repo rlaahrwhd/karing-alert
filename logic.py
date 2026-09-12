@@ -108,6 +108,8 @@ def spoken_advice(key, text):
 
 
 def voice_clip(text):
+    if text == '충전 완료':
+        return 'limbo'
     colors = {'빨간실 맞아요.':'red', '초록실 맞아요.':'green', '노란실 맞아요.':'yellow'}
     if text in colors:
         return colors[text]

@@ -159,7 +159,7 @@ class Toggle(tk.Canvas):
 class App:
     def __init__(self, root):
         self.root = root
-        root.title('카링 알림이')
+        root.title('카링 알림이 · 림보 정화')
         assets = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
         root.iconbitmap(str(assets / 'assets' / 'karing.ico'))
         try:
@@ -170,6 +170,9 @@ class App:
         root.geometry(f'840x{min(820, root.winfo_screenheight()-90)}')
         root.minsize(790, 620)
         self.gauge_region = None
+        self.limbo_region = None
+        self.active_mode = 'karing'
+        self.limbo_state = tk.StringVar(value='정화 상태 확인 대기')
         self.events = queue.Queue(maxsize=3)
         self.stop = threading.Event()
         self.stop.set()
@@ -219,21 +222,28 @@ class App:
         header.pack(fill='x')
         brand = ttk.Frame(header)
         brand.pack(side='left')
-        ttk.Label(brand, text='KARING  /  GAUGE MONITOR', style='Eyebrow.TLabel').pack(anchor='w')
+        ttk.Label(brand, text='KARING + LIMBO  /  GAUGE MONITOR', style='Eyebrow.TLabel').pack(anchor='w')
         ttk.Label(brand, text='카링 알림이', style='Title.TLabel').pack(anchor='w', pady=(3, 0))
         modes = ttk.Frame(header)
         modes.pack(side='right', anchor='n', pady=5)
         for text, value in [('라이트', 'light'), ('다크', 'dark')]:
             ttk.Radiobutton(modes, text=text, value=value, variable=self.theme,
                             style='Mode.TRadiobutton', command=self.change_theme).pack(side='left', padx=2)
-        ttk.Label(frame, text='게이지는 한눈에, 실 안내는 필요한 순간에.', style='Muted.TLabel').pack(anchor='w', pady=(5, 18))
+        ttk.Label(frame, text='카링과 림보, 필요한 순간에 알려드려요.', style='Muted.TLabel').pack(anchor='w', pady=(5, 18))
 
-        region_row = ttk.Frame(frame)
+        self.notebook = ttk.Notebook(frame)
+        self.notebook.pack(fill='x', pady=(0,14))
+        karing_page = ttk.Frame(self.notebook, padding=(0,14))
+        limbo_page = ttk.Frame(self.notebook, padding=16)
+        self.notebook.add(karing_page, text='카링 게이지')
+        self.notebook.add(limbo_page, text='림보 정화 게이지')
+        self.make_limbo_page(limbo_page)
+        region_row = ttk.Frame(karing_page)
         region_row.pack(fill='x', pady=(0,12))
         ttk.Label(region_row, text='위 혼돈 · 왼쪽 도올 · 오른쪽 궁기', style='Muted.TLabel').pack(side='left')
         self.region_button = ttk.Button(region_row, text='게이지 전체 영역 지정', command=self.select)
         self.region_button.pack(side='right')
-        gauges = ttk.Frame(frame)
+        gauges = ttk.Frame(karing_page)
         gauges.pack(fill='x')
         for index, name in enumerate(NAMES):
             gauges.columnconfigure(index, weight=1, uniform='gauge')
@@ -250,7 +260,7 @@ class App:
             self.images[name] = ttk.Label(preview_row, text='인식 대기', style='CardMuted.TLabel')
             self.images[name].pack(side='left')
 
-        config = ttk.Frame(frame, style='Card.TFrame', padding=16)
+        config = ttk.Frame(karing_page, style='Card.TFrame', padding=16)
         config.pack(fill='x', pady=(16, 12))
         top = ttk.Frame(config, style='InnerCard.TFrame')
         top.pack(fill='x')
@@ -265,7 +275,6 @@ class App:
         low = ttk.Spinbox(inputs, from_=0, to=999, textvariable=self.low_input, width=6, font=self.ui_font(12))
         low.pack(side='left', padx=(12, 7))
         ttk.Label(inputs, text='이하일 때 알림', style='Card.TLabel').pack(side='left')
-        ttk.Button(inputs, text='설정 적용', style='Accent.TButton', command=self.apply_thresholds).pack(side='right')
         high.bind('<Return>', lambda e: self.apply_thresholds())
         low.bind('<Return>', lambda e: self.apply_thresholds())
         ttk.Label(config, textvariable=self.threshold_note, style='CardMuted.TLabel').pack(anchor='w')
@@ -281,7 +290,7 @@ class App:
         font_picker = ttk.Combobox(options, textvariable=self.font_scale_input, values=['80%','90%','100%','110%','120%','130%'], state='readonly', width=6)
         font_picker.pack(side='left', padx=(8,0))
         font_picker.bind('<<ComboboxSelected>>', lambda e: self.change_font_scale())
-        ttk.Button(options, text='음성 테스트', command=lambda: self.speaker.speak('빨간실 맞아요.', self.volume.get())).pack(side='right')
+        ttk.Button(options, text='음성 테스트', command=lambda: self.speaker.speak('충전 완료' if self.active_mode=='limbo' else '빨간실 맞아요.', self.volume.get())).pack(side='right')
 
         toggle_row = ttk.Frame(frame)
         toggle_row.pack(fill='x', pady=(0,12))
@@ -289,6 +298,7 @@ class App:
             switch = Toggle(toggle_row, self, text, variable, callback)
             switch.pack(side='left', padx=(0,24))
             self.toggles.append(switch)
+        ttk.Button(toggle_row, text='설정 적용', style='Accent.TButton', command=self.apply_thresholds).pack(side='right')
         volume_row = ttk.Frame(frame)
         volume_row.pack(fill='x', pady=(0,12))
         ttk.Label(volume_row, text='음성 음량 · 남성', style='Muted.TLabel').pack(side='left', padx=(0,12))
@@ -305,13 +315,50 @@ class App:
         self.start_button = ttk.Button(actions, text='모니터링 시작', style='Accent.TButton', command=self.start)
         self.start_button.pack(side='left', expand=True, fill='x')
         ttk.Button(actions, text='모니터링 종료', command=self.pause).pack(side='left', expand=True, fill='x', padx=(10, 0))
-        ttk.Label(frame, text='세 숫자가 모두 보이도록 게이지 전체를 지정하세요. 화면이 이동하면 다시 지정해주세요.', style='Foot.TLabel').pack(anchor='w', pady=(12, 0))
+        ttk.Label(frame, text='선택한 탭에서 게이지 전체 영역을 지정하세요. 탭을 바꾸면 모니터링이 종료돼요.', style='Foot.TLabel').pack(anchor='w', pady=(12, 0))
         root.protocol('WM_DELETE_WINDOW', self.close)
         self.apply_theme()
         self.update_threshold_note()
         self.change_font_scale()
         self.set_top()
+        self.notebook.bind('<<NotebookTabChanged>>', self.tab_changed)
         root.after(100, self.poll)
+
+    def make_limbo_page(self, page):
+        from PIL import Image,ImageTk
+        bar=ttk.Frame(page)
+        bar.pack(fill='x')
+        ttk.Label(bar,text='림보 정화 게이지',font=self.ui_font(15,True)).pack(side='left')
+        self.limbo_region_button=ttk.Button(bar,text='림보 게이지 영역 지정',command=lambda:self.select('limbo'))
+        self.limbo_region_button.pack(side='right')
+        ttk.Label(page,text='중앙 구슬이 밝은 청록색으로 가득 찬 상태를 감지하면 알림을 줍니다.',style='Muted.TLabel',wraplength=650).pack(anchor='w',pady=(8,12))
+        samples=ttk.Frame(page)
+        samples.pack(fill='x')
+        assets=Path(getattr(sys,'_MEIPASS',Path(__file__).parent))/'assets'/'limbo'
+        self.limbo_samples=[]
+        for name,title in [('normal','충전 중 · 알림 없음'),('full','완충 상태 · 알림')]:
+            box=ttk.Frame(samples)
+            box.pack(side='left',padx=(0,16))
+            im=Image.open(assets/f'{name}.png')
+            im.thumbnail((170,135))
+            photo=ImageTk.PhotoImage(im)
+            self.limbo_samples.append(photo)
+            ttk.Label(box,image=photo).pack()
+            ttk.Label(box,text=title,style='Muted.TLabel').pack(pady=5)
+        live=ttk.Frame(samples)
+        live.pack(side='left',padx=8)
+        self.limbo_preview=ttk.Label(live,text='모니터링을 시작하면\n실제 인식 화면이 표시됩니다.',style='Muted.TLabel')
+        self.limbo_preview.pack()
+        ttk.Label(page,textvariable=self.limbo_state,font=self.ui_font(14,True)).pack(anchor='w',pady=(12,0))
+        ttk.Label(page,text='5회 연속 확인 후 알림 · 완충이 유지되면 설정한 음성 간격으로 반복',style='Muted.TLabel',wraplength=650).pack(anchor='w',pady=(4,0))
+
+    def tab_changed(self,event=None):
+        mode='limbo' if self.notebook.index(self.notebook.select())==1 else 'karing'
+        if mode==self.active_mode:
+            return
+        self.pause()
+        self.active_mode=mode
+        self.status.set(('림보' if mode=='limbo' else '카링')+' 탭 · 영역을 지정하고 모니터링을 시작하세요.')
 
     def ui_font(self, size, bold=False):
         key = (size, bold)
@@ -346,6 +393,9 @@ class App:
         self.root.configure(bg=c['bg'])
         self.scroll.configure(bg=c['bg'])
         st.configure('.', font=self.ui_font(10), background=c['bg'], foreground=c['text'], bordercolor=c['border'], lightcolor=c['border'], darkcolor=c['border'])
+        st.configure('TNotebook', background=c['bg'], borderwidth=0)
+        st.configure('TNotebook.Tab', background=c['card'], foreground=c['muted'], padding=(20,10), font=self.ui_font(11,True))
+        st.map('TNotebook.Tab', background=[('selected',c['alert'])],foreground=[('selected',c['accent'])])
         st.configure('TFrame', background=c['bg'])
         st.configure('TLabel', background=c['bg'], foreground=c['text'])
         st.configure('Muted.TLabel', foreground=c['muted'])
@@ -405,7 +455,7 @@ class App:
 
     def apply_thresholds(self):
         try:
-            high, low = validate_thresholds(self.high_input.get().strip(), self.low_input.get().strip())
+            high, low = (self.high,self.low) if self.active_mode=='limbo' else validate_thresholds(self.high_input.get().strip(), self.low_input.get().strip())
             interval = validate_interval(self.interval_input.get().strip())
         except ValueError as exc:
             messagebox.showerror('알림 조건 확인', str(exc), parent=self.root)
@@ -419,11 +469,11 @@ class App:
         self.update_threshold_note()
         self.refresh_values()
         self.preference_changed()
-        self.status.set(f'알림 기준을 저장했어요. {high} 이상 또는 {low} 이하일 때 {interval}초 간격으로 알려드려요.')
+        self.status.set(f'설정을 저장했어요. 음성 알림 최소 간격은 {interval}초입니다.')
         return True
 
     def preference_changed(self):
-        if not self.stop.is_set():
+        if not self.stop.is_set() and self.active_mode=='karing':
             self.alert_key, text = advice(self.current_values, high=self.high, low=self.low)
             self.message.set(text)
             self.refresh_alert()
@@ -441,6 +491,9 @@ class App:
             r = data.get('gauge_region')
             if isinstance(r, dict) and all(type(r.get(k)) is int for k in ('left','top','width','height')) and 60 <= r['width'] <= 2000 and 60 <= r['height'] <= 1500:
                 self.gauge_region = r
+            r = data.get('limbo_region')
+            if isinstance(r,dict) and all(type(r.get(k)) is int for k in ('left','top','width','height')) and 60<=r['width']<=2000 and 60<=r['height']<=1500:
+                self.limbo_region=r
             scale = data.get('font_scale', 100)
             self.font_scale = scale if type(scale) is int and 80 <= scale <= 130 else 100
             self.font_scale_input.set(f'{self.font_scale}%')
@@ -466,11 +519,12 @@ class App:
 
     def settings_save(self):
         try:
-            CONFIG.write_text(json.dumps({'gauge_region': self.gauge_region, 'volume': self.volume.get(), 'font_scale': self.font_scale, 'interval': self.interval, 'voice': self.voice.get(), 'topmost': self.topmost.get(), 'topmost_default_v2': True, 'theme': self.theme.get(), 'high': self.high, 'low': self.low}, ensure_ascii=False, indent=2), encoding='utf-8')
+            CONFIG.write_text(json.dumps({'gauge_region': self.gauge_region, 'limbo_region': self.limbo_region, 'volume': self.volume.get(), 'font_scale': self.font_scale, 'interval': self.interval, 'voice': self.voice.get(), 'topmost': self.topmost.get(), 'topmost_default_v2': True, 'theme': self.theme.get(), 'high': self.high, 'low': self.low}, ensure_ascii=False, indent=2), encoding='utf-8')
         except OSError as exc:
             self.status.set(f'설정 저장 실패: {exc}')
 
-    def select(self):
+    def select(self, mode=None):
+        mode=mode or self.active_mode
         if self.worker and self.worker.is_alive():
             messagebox.showinfo('영역 지정', '모니터링을 종료한 후 영역을 지정해주세요.')
             return
@@ -492,13 +546,13 @@ class App:
         def choose(monitor, number):
             picker.destroy()
             self.root.withdraw()
-            self.root.after(250, lambda: self.selector(monitor, number))
+            self.root.after(250, lambda: self.selector(monitor, number, mode))
         for number, monitor in enumerate(monitors,1):
             title = f"모니터 {number}  ·  {monitor['width']} × {monitor['height']}  ·  위치 ({monitor['left']}, {monitor['top']})"
             ttk.Button(body, text=title, command=lambda m=monitor,n=number:choose(m,n)).pack(fill='x',pady=4)
         picker.grab_set()
 
-    def selector(self, monitor, number):
+    def selector(self, monitor, number, mode):
         import mss
         from PIL import Image, ImageTk
         overlay = None
@@ -512,7 +566,7 @@ class App:
             overlay.title(f'모니터 {number} · 게이지 전체 영역 지정')
             overlay.resizable(False,False)
             overlay.attributes('-topmost', True)
-            ttk.Label(overlay, text='세 숫자를 포함한 게이지 전체를 드래그하세요.  Esc: 취소', padding=12).pack(fill='x')
+            ttk.Label(overlay, text=('반원 테두리와 중앙 구슬을 포함해 림보 게이지 전체를 드래그하세요.  Esc: 취소' if mode=='limbo' else '세 숫자를 포함한 게이지 전체를 드래그하세요.  Esc: 취소'), padding=12).pack(fill='x')
             canvas = tk.Canvas(overlay, width=preview_size[0], height=preview_size[1], highlightthickness=0, cursor='crosshair')
             canvas.pack()
             photo = ImageTk.PhotoImage(picture.resize(preview_size, Image.Resampling.LANCZOS))
@@ -548,9 +602,14 @@ class App:
                 region = region_from_preview(monitor,preview_size,start,(event.x,event.y))
                 if not (60 <= region['width'] <= 2000 and 60 <= region['height'] <= 1500):
                     return
-                self.gauge_region = region
+                if mode=='limbo':
+                    self.limbo_region=region
+                    button=self.limbo_region_button
+                else:
+                    self.gauge_region=region
+                    button=self.region_button
                 cancel()
-                self.region_button.configure(text=f'모니터 {number} · 영역 다시 지정')
+                button.configure(text=f'모니터 {number} · 영역 다시 지정')
                 self.settings_save()
                 self.status.set(f'모니터 {number}의 게이지 영역을 지정했어요.')
             canvas.bind('<ButtonPress-1>',begin)
@@ -568,15 +627,16 @@ class App:
     def start(self):
         if not self.apply_thresholds():
             return
-        if self.gauge_region is None:
-            messagebox.showinfo('영역 지정 필요', '세 숫자가 포함된 게이지 전체 영역을 한 번 지정해주세요.')
+        region=self.limbo_region if self.active_mode=='limbo' else self.gauge_region
+        if region is None:
+            messagebox.showinfo('영역 지정 필요', '현재 탭의 게이지 전체 영역을 한 번 지정해주세요.')
             return
         if self.worker and self.worker.is_alive():
             return
         import mss
         try:
             with mss.mss() as capture:
-                if not any(region_in_monitor(self.gauge_region,m) for m in capture.monitors[1:]):
+                if not any(region_in_monitor(region,m) for m in capture.monitors[1:]):
                     messagebox.showinfo('영역 다시 지정', '저장된 영역이 한 모니터 안에 있지 않아요. 모니터를 선택해 다시 지정해주세요.')
                     return
         except Exception as exc:
@@ -588,9 +648,10 @@ class App:
         self.gate = Cooldown(self.interval)
         self.settings_save()
         self.start_button.configure(state='disabled')
-        self.status.set('OCR 준비 중… 처음 시작할 때 시간이 걸릴 수 있어요.')
-        region = dict(self.gauge_region)
-        self.worker = threading.Thread(target=self.monitor, args=(region,), daemon=True)
+        self.status.set('인식 준비 중… 잠시 기다려주세요.')
+        region = dict(region)
+        mode=self.active_mode
+        self.worker = threading.Thread(target=self.monitor, args=(region,mode), daemon=True)
         self.worker.start()
 
     def emit(self, event):
@@ -601,7 +662,10 @@ class App:
                 pass
         self.events.put_nowait(event)
 
-    def monitor(self, region):
+    def monitor(self, region, mode='karing'):
+        if mode=='limbo':
+            self.monitor_limbo(region)
+            return
         try:
             import mss
             from PIL import Image
@@ -621,9 +685,30 @@ class App:
         except Exception as exc:
             self.emit(('error', str(exc)))
 
+    def monitor_limbo(self,region):
+        try:
+            import mss
+            from PIL import Image
+            from limbo import LimboDetector,StableFull
+            detector=LimboDetector()
+            stable=StableFull(frames=5)
+            with mss.mss() as capture:
+                while not self.stop.is_set():
+                    begin=time.monotonic()
+                    shot=capture.grab(region)
+                    picture=Image.frombytes('RGB',shot.size,shot.rgb)
+                    result,details=detector.inspect(picture)
+                    state=stable.update(result)
+                    picture.thumbnail((170,135))
+                    self.emit(('limbo',time.monotonic(),state,picture))
+                    self.stop.wait(max(.05,.25-(time.monotonic()-begin)))
+        except Exception as exc:
+            self.emit(('error',str(exc)))
+
     def pause(self):
         self.stop.set()
         self.message.set('모니터링 종료')
+        self.limbo_state.set('정화 상태 확인 대기')
         self.status.set('시작 버튼으로 다시 모니터링할 수 있어요.')
         self.current_values = dict.fromkeys(NAMES)
         self.alert_key = None
@@ -643,7 +728,22 @@ class App:
                     self.alert_key = ('error',)
                     self.refresh_values()
                     self.refresh_alert()
-                elif not self.stop.is_set():
+                elif event[0]=='limbo' and not self.stop.is_set() and self.active_mode=='limbo':
+                    _,timestamp,state,picture=event
+                    if time.monotonic()-timestamp>2:
+                        continue
+                    photo=ImageTk.PhotoImage(picture)
+                    self.limbo_preview.configure(image=photo,text='')
+                    self.limbo_preview.photo=photo
+                    label='충전 완료' if state is True else ('충전 중' if state is False else '게이지 확인 중')
+                    self.limbo_state.set(label)
+                    self.message.set('충전 완료' if state is True else label)
+                    self.alert_key=('limbo',) if state is True else None
+                    self.refresh_alert()
+                    self.status.set('림보 모니터링 중 · 완충 특징을 5회 연속 확인합니다.')
+                    if state is True and self.voice.get() and self.volume.get()>0 and not self.speaker.busy and self.gate.allow(('limbo',),time.monotonic()):
+                        self.speaker.speak('충전 완료',self.volume.get())
+                elif event[0]=='values' and not self.stop.is_set() and self.active_mode=='karing':
                     _, timestamp, values, previews = event
                     if time.monotonic()-timestamp > 2:
                         continue
@@ -683,9 +783,14 @@ if __name__ == '__main__':
     load_bundled_fonts()
     if len(sys.argv) == 3 and sys.argv[1] == '--check-voice':
         assets = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
-        for clip in ('red','green','yellow','limit','conflict'):
+        for clip in ('red','green','yellow','limit','conflict','limbo'):
             Speaker.play_clip(assets / 'assets' / 'voice' / f'{clip}.wav', 0)
-        Path(sys.argv[2]).write_text('Male voice: 5 clips decoded and played at volume 0', encoding='utf-8')
+        Path(sys.argv[2]).write_text('Male voice: 6 clips decoded and played at volume 0', encoding='utf-8')
+    elif len(sys.argv)==4 and sys.argv[1]=='--check-limbo':
+        from limbo import LimboDetector
+        from PIL import Image
+        state,details=LimboDetector().inspect(Image.open(sys.argv[2]))
+        Path(sys.argv[3]).write_text(json.dumps({'full':state,'details':details}),encoding='utf-8')
     elif len(sys.argv) == 4 and sys.argv[1] in ('--check-ocr', '--check-gauge'):
         from PIL import Image
         from rapidocr_onnxruntime import RapidOCR

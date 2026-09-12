@@ -18,6 +18,7 @@ class Value:
 def settings_object():
     obj = app.App.__new__(app.App)
     obj.gauge_region = None
+    obj.limbo_region = None
     obj.volume = Value(80)
     obj.font_scale = 100
     obj.font_scale_input = Value('100%')
@@ -49,6 +50,7 @@ class Settings(unittest.TestCase):
             original.font_scale = 120
             original.interval = 25
             original.gauge_region = {'left':10,'top':20,'width':280,'height':310}
+            original.limbo_region = {'left':-1000,'top':90,'width':420,'height':350}
             original.settings_save()
             loaded = settings_object()
             loaded.settings_load()
@@ -62,6 +64,7 @@ class Settings(unittest.TestCase):
             self.assertEqual(loaded.gate.seconds,25)
             self.assertNotIn('phase',json.loads(app.CONFIG.read_text(encoding='utf-8')))
             self.assertEqual(loaded.gauge_region, original.gauge_region)
+            self.assertEqual(loaded.limbo_region, original.limbo_region)
 
     def test_old_settings_and_invalid_thresholds(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(app, 'CONFIG', Path(directory)/'settings.json'):

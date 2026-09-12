@@ -1,10 +1,6 @@
 __pycache__/
 *.py[cod]
+settings.json
 .venv/
-venv/
 build/
 dist/
-bin/
-*.spec
-settings.json
-*.log
