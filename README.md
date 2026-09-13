@@ -8,12 +8,15 @@
    <img width="810" height="827" alt="image" src="https://github.com/user-attachments/assets/4a29d88e-2b4c-4cc9-9b0a-33b91e4477a2" />
 
 3. 메이플스토리를 창모드 또는 테두리 없는 창모드로 엽니다.
+   
 
 4. **게이지 전체 영역 지정**을 누르고 게임이 있는 모니터를 선택합니다.
    <img width="344" height="187" alt="image" src="https://github.com/user-attachments/assets/6064190c-7dae-410b-95fc-f317c8a70873" />
 
+
 5. 선택한 화면의 미리보기에서 아래 이미지처럼 게이지가 포함된 전체를 드래그합니다.
    <img width="188" height="225" alt="image" src="https://github.com/user-attachments/assets/47b22edb-6ed4-44c2-8146-00db48dd66b5" />
+
 
 6. 상한·하한과 음성 간격을 입력하고 **설정 적용**을 누릅니다. 기본 기준은 800 이상 / 100 이하입니다.
 7. 음량을 조절하고 **음성 테스트**로 확인한 뒤 **모니터링 시작**을 누릅니다.
