@@ -18,8 +18,8 @@
 
 - 다크·라이트 모드, 글자 크기 80~130%, 음량 0~100%를 지원합니다.
 - 음량 0%는 음소거입니다. 한국어 남성 InJoon 음성은 기본 대비 30% 빠릅니다. 파일이 포함되어 인터넷이나 별도 음성 설치가 필요하지 않습니다.
-- 메이플스토리 Light/Bold 폰트가 포함됩니다. Windows에 설치하지 않습니다.
-- 항상 위에 표시의 기본값은 꺼짐입니다. v8 이전의 기본 켜짐 설정은 첫 실행에서 꺼짐으로 전환하고, 이후 직접 선택한 상태를 유지합니다.
+- 메이플스토리 Light/Bold 폰트가 포함됩니다.
+- 항상 위에 표시의 기본값은 꺼짐입니다.
 - 설정은 실행 파일 옆 `settings.json`에 저장됩니다. 업데이트 시 이 파일을 새 실행 파일 옆으로 복사하면 설정을 이어 쓸 수 있습니다.
 
 ## 게이지와 안내
@@ -52,4 +52,5 @@ Windows, Python 3.10~3.12에서 소스 폴더를 열고 실행합니다. `assets
 - OCR: [RapidOCR](https://github.com/RapidAI/RapidOCR)
 - 화면 캡처: [MSS](https://python-mss.readthedocs.io/stable/)
 - 음성 제작: Microsoft Edge 음성 서비스의 ko-KR-InJoonNeural, [edge-tts](https://github.com/rany2/edge-tts). 실행 중에는 이 서비스에 연결하지 않습니다.
+- 폰트 출처 : 메이플스토리 서체 https://maplestory.nexon.com/media/font
 - 폰트·아이콘·게이지 참고 이미지: 사용자가 제공한 자료
