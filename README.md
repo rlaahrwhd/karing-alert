@@ -19,7 +19,7 @@
 6. 선택한 화면의 미리보기에서 아래 이미지처럼 게이지가 포함된 전체를 드래그합니다.
 
    <img width="188" height="225" alt="image" src="https://github.com/user-attachments/assets/47b22edb-6ed4-44c2-8146-00db48dd66b5" />
-   <img width="422" height="331" alt="normal" src="https://github.com/user-attachments/assets/74b5b63a-4bc6-4626-a89f-e7781fe5d162" />
+   <img width="188" height="225" alt="normal" src="https://github.com/user-attachments/assets/74b5b63a-4bc6-4626-a89f-e7781fe5d162" />
 
 
 
