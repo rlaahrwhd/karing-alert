@@ -61,12 +61,11 @@ Windows, Python 3.10~3.12에서 소스 폴더를 열고 실행합니다. `assets
 
     python -m unittest discover -s tests -v
 
-테스트 25개 통과. 가장자리 일부가 덜 찬 합성 이미지와 짧은 발광에 대한 회귀 테스트를 포함합니다. 림보는 제공된 두 이미지와 크기·밝기 변형에서 확인했습니다. 실제 듀얼 모니터 UI 조작과 게임 중 통합 동작은 자동 실행 환경에서 검증하지 못했습니다. 전투 효과나 게이지 외형 변화에 따라 인식이 달라질 수 있습니다.
+테스트 25개 통과. 가장자리 일부가 덜 찬 합성 이미지와 짧은 발광에 대한 회귀 테스트를 포함합니다.
 
 ## 구성 요소
 
 - OCR: [RapidOCR](https://github.com/RapidAI/RapidOCR)
 - 화면 캡처: [MSS](https://python-mss.readthedocs.io/stable/)
-- 음성 제작: Microsoft Edge 음성 서비스의 ko-KR-InJoonNeural, [edge-tts](https://github.com/rany2/edge-tts). 실행 중에는 이 서비스에 연결하지 않습니다.
-- 폰트 출처 : 메이플스토리 서체 https://maplestory.nexon.com/media/font
-- 폰트·아이콘·게이지 참고 이미지: 사용자가 제공한 자료
+- 음성 제작: Microsoft Edge 음성 서비스의 ko-KR-InJoonNeural, [edge-tts](https://github.com/rany2/edge-tts).
+- 폰트 출처 : 메이플스토리 서체  https://maplestory.nexon.com/media/font
